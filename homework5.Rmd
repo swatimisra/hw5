@@ -1,0 +1,199 @@
+---
+title: "Homework 5"
+author: "Swati Misra (SM83264)"
+date: "2024-02-28"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(mosaic)
+library(ggplot2)
+library(knitr)
+```
+
+Github Repo: https://github.com/swatimisra/hw5
+
+# Problem 1
+
+```{r, echo = FALSE}
+
+sim_bank = do(100000)*nflip(n=2021, prob=0.024)
+```
+
+### Null Hypothesis
+
+The observed data is consistent with the idea that over the long run, securities trades from the Iron Bank are flagged at the same 2.4% baseline rate as that of other traders. 
+
+### Test Statistic
+
+The test statistic is the number of flagged securities trades from Iron Bank. In our data, 70 of 2021 traders were flagged by SEC's algorithm. 
+
+### Plot
+
+```{r, echo = FALSE}
+ggplot(sim_bank) + 
+  geom_histogram(aes(x=nflip), binwidth=1) + labs(title = "Test Statistic Distribution")
+```
+This is a plot of the probability distribution of the test statistic assuming that the null hypothesis is true.
+
+### P Value
+```{r, echo = FALSE, results = 'hide'}
+pval <- sum(sim_bank >= 70) / 100000
+pval
+```
+
+The p-value is `r pval`. This p value is very small.
+
+### Conclusion
+
+Since the p-value is so small, and less than 0.05, this means the null hypothesis that over the long run, securities trades from the Iron Bank are flagged at the same 2.4% baseline rate as that of other traders should be rejected. There may be suspicious activity occuring in the trades from the Iron Bank. 
+
+
+# Problem 2
+
+```{r, echo = FALSE}
+
+sim_health = do(100000)*nflip(n=50, prob=0.03)
+```
+
+### Null Hypothesis
+
+On average, restaurants in the city are cited for health code violations at the same 3% baseline rate. 
+
+### Test Statistic
+
+The test statistic is the number of restaurants in the city that had health code violation reports. In our data, the 50 inspections of Gourmet bites had 8 health code violations being reported. 
+
+### Plot
+
+```{r, echo = FALSE}
+ggplot(sim_health) + 
+  geom_histogram(aes(x=nflip), binwidth=1) + labs(title = "Test Statistic Distribution")
+```
+This is a plot of the probability distribution of the test statistic assuming that the null hypothesis is true.
+
+### P Value
+```{r, echo = FALSE, results = 'hide'}
+pval1 <- sum(sim_health >= 8) / 100000
+pval1
+```
+
+The p-value is `r pval1`.
+
+### Conclusion
+
+Since the p-value is so small, and less than 0.05, this means the null hypothesis that on average, restaurants in the city are cited for health code violations at the same 3% baseline rate should be rejected. There may be more health code violations than the 3% baseline. 
+
+
+\vspace{18em} <!-- to add space between sections -->
+
+# Problem 3
+
+```{r, echo = FALSE}
+letter <- read.csv("letter_frequencies.csv")
+
+sentences <- readLines("brown_sentences.txt")
+sentences_txt <- tibble(Sentences = sentences)
+
+calculate_chi_squared = function(sentence, freq_table) {
+  
+  # Ensure letter frequencies are normalized and sum to 1
+  freq_table$Probability = freq_table$Probability / sum(freq_table$Probability)
+  
+  # Remove non-letters and convert to uppercase
+  clean_sentence = gsub("[^A-Za-z]", "", sentence)
+  clean_sentence = toupper(clean_sentence)
+  
+  # Count the occurrences of each letter in the sentence
+  observed_counts = table(factor(strsplit(clean_sentence, "")[[1]], levels = freq_table$Letter))
+  
+  # Calculate expected counts
+  total_letters = sum(observed_counts)
+  expected_counts = total_letters * freq_table$Probability
+  
+  return(list(obs_count = observed_counts, exp_count = expected_counts))
+}
+
+brown_null = numeric(nrow(sentences_txt))
+
+for (i in 1:nrow(sentences_txt)) {
+  brown_residuals <- calculate_chi_squared(sentences_txt$Sentences[i], freq_table = letter)
+  
+  chi_stat <- sum((brown_residuals$obs_count - brown_residuals$exp_count)^2 / brown_residuals$exp_count)
+  
+  brown_null[i] <- chi_stat
+}
+```
+
+
+### Part B
+```{r, echo = FALSE, results='asis'}
+sentences <- c(
+  "She opened the book and started to read the first chapter, eagerly anticipating what might come next.",
+  "Despite the heavy rain, they decided to go for a long walk in the park, crossing the main avenue by the fountain in the center.",
+  "The museum’s new exhibit features ancient artifacts from various civilizations around the world.",
+  "He carefully examined the document, looking for any clues that might help solve the mystery.",
+  "The students gathered in the auditorium to listen to the guest speaker’s inspiring lecture.",
+  "Feeling vexed after an arduous and zany day at work, she hoped for a peaceful and quiet evening at home, cozying up after a quick dinner with some TV, or maybe a book on her upcoming visit to Auckland.",
+  "The chef demonstrated how to prepare a delicious meal using only locally sourced ingredients, focusing mainly on some excellent dinner recipes from Spain.",
+  "They watched the sunset from the hilltop, marveling at the beautiful array of colors in the sky.",
+  "The committee reviewed the proposal and provided many points of useful feedback to improve the project’s effectiveness.",
+  "Despite the challenges faced during the project, the team worked tirelessly to ensure its successful completion, resulting in a product that exceeded everyone’s expectations."
+)
+
+test <- tibble(Sentences = sentences)
+
+test_dist = numeric(nrow(test))
+
+for (i in 1:nrow(test)){
+  test_residuals <- calculate_chi_squared(test$Sentences[i], freq_table = letter)
+  
+  chi_stat <- sum((test_residuals$obs_count - test_residuals$exp_count)^2 /test_residuals$exp_count)
+  test_dist[i] <- chi_stat
+}
+
+test$ChiStat <- test_dist
+
+test$P_value <- sapply(test_dist, function(ChiSquare){
+  sum(brown_null >= ChiSquare) / length(brown_null)
+})
+
+test_pval <- test %>%
+  select(P_value)
+
+test_pval <- test_pval %>%
+  mutate(P_value = round(P_value,4))
+
+test_pval <- test_pval %>%
+  mutate(Sentence = c(1:10))
+
+test_pval <- test_pval %>%
+  select(Sentence, P_value)
+
+table_html <- knitr::kable(test_pval, 
+                           caption = "Table of Sentences and P-values",
+                           digits = 3)
+
+table_html
+#sentence_kable <- kableExtra::kbl(round(test_pval,3), col.names = c("Sentence", "P-Value"))
+
+#sentence_kable <- sentence_kable %>%
+ #kable_classic(full_width = F)
+
+```
+
+
+The sentence that has been produced by the LLM but watermarked by asking the LLM to subtly adjust its frequency distribution over letters is sentence 6. We know this because this sentence is the only sentence with a p-value below 0.05 which means we can reject the null hypothesis that the sentence follows the "typical" English letter distribution.
+
+
+
+
+
+
+
+
+
+
